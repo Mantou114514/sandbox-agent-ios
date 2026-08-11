@@ -1,0 +1,53 @@
+name: SandboxAgent
+options:
+  bundleIdPrefix: com.sandboxagent
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "Apple Development"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+
+targets:
+  SandboxAgent:
+    type: application
+    platform: iOS
+    sources:
+      - path: SandboxAgent
+        excludes:
+          - "Info.plist"
+    resources:
+      - path: SandboxAgent/Info.plist
+        buildPhase: none
+    info:
+      path: SandboxAgent/Info.plist
+      properties:
+        CFBundleDisplayName: Sandbox Agent
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: ""
+        NSMicrophoneUsageDescription: "需要麦克风权限以进行语音交互"
+        NSCameraUsageDescription: ""
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        UIBackgroundModes:
+          - voip
+          - audio
+        UIRequiredDeviceCapabilities:
+          - armv7
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sandboxagent.app
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: SandboxAgent/Info.plist
