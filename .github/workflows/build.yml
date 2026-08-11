@@ -5,49 +5,72 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-14  # GitHub 免费 macOS Sonoma runner
+    name: Build SandboxAgent
+    runs-on: macos-14
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Select Xcode
-      run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
-
-    - name: Show Xcode version
-      run: xcodebuild -version
-
-    - name: List Schemes
-      run: xcodebuild -list -project SandboxAgent.xcodeproj || echo "no xcodeproj"
-
-    - name: Build (unsigned)
+    - name: Select Xcode 15.4
       run: |
-        xcodebuild -project SandboxAgent.xcodeproj \
+        ls /Applications | grep -i xcode
+        sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        xcodebuild -version
+
+    - name: Install XcodeGen
+      run: |
+        brew install xcodegen || {
+          # fallback: download binary
+          mkdir -p /tmp/xcodegen && cd /tmp/xcodegen
+          curl -L -o xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip
+          unzip xcodegen.zip
+          chmod +x xcodegen
+          sudo mv xcodegen /usr/local/bin/
+        }
+        xcodegen --version
+
+    - name: Generate Xcode project
+      run: xcodegen generate --spec project.yml
+
+    - name: List Xcode project
+      run: |
+        ls -la
+        xcodebuild -list -project SandboxAgent.xcodeproj || echo "project listing failed"
+
+    - name: Build for simulator (unsigned)
+      run: |
+        xcodebuild \
+          -project SandboxAgent.xcodeproj \
           -scheme SandboxAgent \
           -configuration Release \
           -sdk iphonesimulator \
           -derivedDataPath build \
+          -destination 'generic/platform=iOS Simulator' \
           CODE_SIGNING_ALLOWED=NO \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGN_IDENTITY="" \
           build
 
-    - name: Create IPA from simulator build
+    - name: Locate built .app
+      run: |
+        find build -name "SandboxAgent.app" -type d
+        APP_PATH=$(find build -name "SandboxAgent.app" -type d | head -1)
+        echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
+    - name: Package as IPA
       run: |
         mkdir -p payload
-        APP_PATH=$(find build -name "SandboxAgent.app" -type d | head -1)
-        if [ -z "$APP_PATH" ]; then
-          echo "ERROR: SandboxAgent.app not found"
-          find build -name "*.app" -type d
-          exit 1
-        fi
         cp -R "$APP_PATH" payload/
         cd payload
-        zip -r SandboxAgent.ipa SandboxAgent.app
+        # Create minimal IPA structure
+        mkdir -p Payload
+        mv SandboxAgent.app Payload/
+        zip -r SandboxAgent.ipa Payload
         ls -la
 
     - name: Upload IPA artifact
@@ -58,9 +81,12 @@ jobs:
         if-no-files-found: error
         retention-days: 30
 
-    - name: Upload IPA (debug build for sideloading)
+    - name: Upload debug-info
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: SandboxAgent-IPA-Sideload
-        path: payload/SandboxAgent.ipa
-        retention-days: 30
+        name: build-logs
+        path: |
+          build/Logs/**/*.log
+          build/Logs/**/*.txt
+        retention-days: 7
