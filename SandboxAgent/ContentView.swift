@@ -336,7 +336,7 @@ struct AudioLevelView: View {
     private func barHeight(for index: Int) -> CGFloat {
         let normalizedLevel = min(max(level / 10, 0), 1) // Normalize 0-1
         let threshold = Double(index) / 20.0
-        let height = normalizedLevel > threshold ? CGFloat.random(in: 20...50) : 4
+        let height = normalizedLevel > Float(threshold) ? CGFloat.random(in: 20...50) : 4
         return height
     }
 }
