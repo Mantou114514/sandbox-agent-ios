@@ -1,0 +1,66 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  build:
+    runs-on: macos-14  # GitHub 免费 macOS Sonoma runner
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Select Xcode
+      run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+    - name: Show Xcode version
+      run: xcodebuild -version
+
+    - name: List Schemes
+      run: xcodebuild -list -project SandboxAgent.xcodeproj || echo "no xcodeproj"
+
+    - name: Build (unsigned)
+      run: |
+        xcodebuild -project SandboxAgent.xcodeproj \
+          -scheme SandboxAgent \
+          -configuration Release \
+          -sdk iphonesimulator \
+          -derivedDataPath build \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY="" \
+          build
+
+    - name: Create IPA from simulator build
+      run: |
+        mkdir -p payload
+        APP_PATH=$(find build -name "SandboxAgent.app" -type d | head -1)
+        if [ -z "$APP_PATH" ]; then
+          echo "ERROR: SandboxAgent.app not found"
+          find build -name "*.app" -type d
+          exit 1
+        fi
+        cp -R "$APP_PATH" payload/
+        cd payload
+        zip -r SandboxAgent.ipa SandboxAgent.app
+        ls -la
+
+    - name: Upload IPA artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SandboxAgent-IPA
+        path: payload/SandboxAgent.ipa
+        if-no-files-found: error
+        retention-days: 30
+
+    - name: Upload IPA (debug build for sideloading)
+      uses: actions/upload-artifact@v4
+      with:
+        name: SandboxAgent-IPA-Sideload
+        path: payload/SandboxAgent.ipa
+        retention-days: 30
