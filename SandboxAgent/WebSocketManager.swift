@@ -20,12 +20,26 @@ class WebSocketManager: ObservableObject {
     @Published var receivedAudio: Data = Data()
     @Published var asrResult: String = ""
     
-    enum ConnectionState {
+    enum ConnectionState: Equatable {
         case disconnected
         case connecting
         case connected
         case reconnecting
-        case failed(Error)
+        case failed(String)
+    }
+
+    static func == (lhs: ConnectionState, rhs: ConnectionState) -> Bool {
+        switch (lhs, rhs) {
+        case (.disconnected, .disconnected),
+             (.connecting, .connecting),
+             (.connected, .connected),
+             (.reconnecting, .reconnecting):
+            return true
+        case (.failed(let a), .failed(let b)):
+            return a == b
+        default:
+            return false
+        }
     }
     
     private var webSocketTask: URLSessionWebSocketTask?
@@ -64,7 +78,7 @@ class WebSocketManager: ObservableObject {
         print("Connecting to \(serverURL)...")
         
         guard let url = URL(string: serverURL) else {
-            connectionState = .failed(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]))
+            connectionState = .failed("Invalid URL")
             return
         }
         
@@ -76,7 +90,7 @@ class WebSocketManager: ObservableObject {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
             if self?.connectionState == .connecting {
-                self?.connectionState = .failed(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Connection timeout"]))
+                self?.connectionState = .failed("Connection timeout")
             }
         }
     }
@@ -209,7 +223,7 @@ class WebSocketManager: ObservableObject {
     
     private func handleDisconnection(error: Error) {
         isConnected = false
-        connectionState = .failed(error)
+        connectionState = .failed(error.localizedDescription)
         stopPing()
         
         // Auto-reconnect after 3 seconds
