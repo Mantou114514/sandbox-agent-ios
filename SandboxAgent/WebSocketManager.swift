@@ -28,20 +28,6 @@ class WebSocketManager: ObservableObject {
         case failed(String)
     }
 
-    static func == (lhs: ConnectionState, rhs: ConnectionState) -> Bool {
-        switch (lhs, rhs) {
-        case (.disconnected, .disconnected),
-             (.connecting, .connecting),
-             (.connected, .connected),
-             (.reconnecting, .reconnecting):
-            return true
-        case (.failed(let a), .failed(let b)):
-            return a == b
-        default:
-            return false
-        }
-    }
-    
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession
     private var reconnectTimer: Timer?
