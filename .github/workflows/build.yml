@@ -18,31 +18,41 @@ jobs:
 
     - name: Select Xcode 15.4
       run: |
-        ls /Applications | grep -i xcode
-        sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
         xcodebuild -version
 
     - name: Install XcodeGen
       run: |
-        brew install xcodegen || {
-          # fallback: download binary
-          mkdir -p /tmp/xcodegen && cd /tmp/xcodegen
-          curl -L -o xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip
-          unzip xcodegen.zip
-          chmod +x xcodegen
-          sudo mv xcodegen /usr/local/bin/
-        }
+        brew install xcodegen
         xcodegen --version
 
-    - name: Generate Xcode project
-      run: xcodegen generate --spec project.yml
+    - name: Generate Xcode project (legacy format)
+      run: |
+        xcodegen generate --spec project.yml --project-root .
+        # Force project to Xcode 15.4 compatible format
+        ruby -e "
+          require 'xcodeproj'
+          project_path = 'SandboxAgent.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+          # Set compatibility version to Xcode 15
+          project.root_object.attributes['LastUpgradeCheck'] = '1530'
+          project.root_object.attributes['LastSwiftUpdateCheck'] = '1530'
+          # Force object version to 56 (Xcode 15)
+          project.root_object.object_version = 56
+          project.save
+          puts 'Converted to Xcode 15 compatible format'
+        " || echo "Ruby xcodeproj not available, using plutil"
+        # If Ruby failed, manually patch project.pbxproj object version
+        if grep -q "objectVersion = 77" SandboxAgent.xcodeproj/project.pbxproj 2>/dev/null; then
+          sed -i '' 's/objectVersion = 77/objectVersion = 56/g' SandboxAgent.xcodeproj/project.pbxproj
+          echo "Patched objectVersion 77 -> 56"
+        fi
 
     - name: List Xcode project
       run: |
-        ls -la
         xcodebuild -list -project SandboxAgent.xcodeproj || echo "project listing failed"
 
-    - name: Build for simulator (unsigned)
+    - name: Build for simulator
       run: |
         xcodebuild \
           -project SandboxAgent.xcodeproj \
@@ -58,16 +68,15 @@ jobs:
 
     - name: Locate built .app
       run: |
-        find build -name "SandboxAgent.app" -type d
         APP_PATH=$(find build -name "SandboxAgent.app" -type d | head -1)
         echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+        echo "Found: $APP_PATH"
 
     - name: Package as IPA
       run: |
         mkdir -p payload
         cp -R "$APP_PATH" payload/
         cd payload
-        # Create minimal IPA structure
         mkdir -p Payload
         mv SandboxAgent.app Payload/
         zip -r SandboxAgent.ipa Payload
@@ -81,7 +90,7 @@ jobs:
         if-no-files-found: error
         retention-days: 30
 
-    - name: Upload debug-info
+    - name: Upload build logs
       if: always()
       uses: actions/upload-artifact@v4
       with:
