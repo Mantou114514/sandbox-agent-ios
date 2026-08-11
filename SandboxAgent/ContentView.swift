@@ -104,7 +104,7 @@ struct ConnectionStatusCard: View {
                     .foregroundColor(.white)
                 
                 if case .failed(let error) = wsManager.connectionState {
-                    Text(error.localizedDescription)
+                    Text(error)
                         .font(.caption)
                         .foregroundColor(.red)
                         .lineLimit(1)
@@ -264,7 +264,6 @@ struct ResponseDisplayCard: View {
                     Image(systemName: "waveform")
                         .font(.caption)
                         .foregroundColor(.cyan)
-                        .symbolEffect(.pulse, options: .repeating)
                 }
             }
             
